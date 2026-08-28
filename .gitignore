@@ -23,13 +23,26 @@ crash.log
 *.log
 *.jpg
 *.png
+# ...except app resources. The blanket *.png above is aimed at device screenshots, but it
+# also swallowed the launcher icons: minSdkVersion 23 needs rasterised mipmap-*dpi buckets
+# for API 23-25, which never load the adaptive mipmap-anydpi-v26 variant. Both test devices
+# are API 26+, so a silently un-added bucket is invisible here and shows up as a missing
+# launcher icon on someone's Android 6 or 7 phone. (GW-44)
+!app/src/main/res/**/*.png
 
-# FreeSWITCH configs (not for public repo)
-freeswitch-config/
-freeswitch-lxc/
-
-# Documentation (keep only README.md)
+# Documentation (keep only README.md and Claude Code files)
 *.md
 !README.md
+!CLAUDE.md
+!SKILL.md
+# ...except docs/, which is checked in on purpose: the refactor briefs under
+# docs/refactor/ are the specification agents work from, and a git worktree only
+# ever gets tracked files.
+!docs/**
 openvpn_configs
 wireguard/
+
+# Agent worktrees and captured device logs: never commit these.
+# Phase 1 lesson - a bare `git add -A` swept 14 worktrees in as embedded git repos.
+.claude/worktrees/
+logs/

@@ -21,13 +21,28 @@ public class SipAccountManager {
     private final GatewayConfig config;
     private final SipEndpointManager endpointManager;
 
-    private GatewayAccount account;
-    private boolean registered = false;
-    private String lastError = null;
+    /**
+     * Written on the {@code GatewayControl} thread ({@link #createAccount} from SIP init and
+     * from reload, {@link #deleteAccount} from reload) and on main ({@code onDestroy}'s
+     * shutdown); read from the control thread, main (SMS, the diagnostic call) and NanoHTTPD
+     * workers. Snapshot before use.
+     */
+    private volatile GatewayAccount account;
+
+    /**
+     * Written on a pjsua worker ({@link #onRegState}), <em>synchronously</em> and before the
+     * listener is invoked - GW-10 posts the listener's handling onto the control thread but
+     * never the flag itself, because it gates later calls into pjsua2 (plan §2.6). Read from
+     * the control thread, main and NanoHTTPD.
+     */
+    private volatile boolean registered = false;
+
+    /** Written on a pjsua worker ({@link #onRegState}); read from the control thread and NanoHTTPD. */
+    private volatile String lastError = null;
 
     public interface AccountListener {
         void onRegistrationState(boolean registered, String reason);
-        void onIncomingCall(GatewayAccount account, int callId);
+        void onIncomingCall(GatewayAccount account, int callId, int simSlotHint);
         void onInstantMessage(String from, String to, String body, int simSlot);
     }
 
@@ -44,9 +59,32 @@ public class SipAccountManager {
 
     /**
      * Get the current account.
+     *
+     * <p>The reference is only meaningful for as long as it is still the current one:
+     * {@link #deleteAccount()} calls {@code delete()} on the native object and then drops the
+     * field, and pjsua2 gives no way to ask a {@code GatewayAccount} whether its native peer
+     * is still alive. Callers must therefore hold this on the control thread, from the read
+     * right through to the pjsua2 call that consumes it, and re-check with
+     * {@link #isCurrentAccount(GatewayAccount)} immediately before that call. AUDIT F4.
      */
     public GatewayAccount getAccount() {
         return account;
+    }
+
+    /**
+     * True while {@code candidate} is still the account this manager owns.
+     *
+     * <p>The last-moment half of the F4 guard. It is <em>not</em> a substitute for holding the
+     * control thread across the read and the use - {@code account} can only change while this
+     * thread is not looking, so a re-check on a different thread proves nothing and would just
+     * narrow the window. What it does buy, on the control thread, is a cheap check against the
+     * one writer that is still not on it: {@code shutdownSip()} calls {@link #deleteAccount()}
+     * from main during {@code onDestroy}. That path is ordered behind
+     * {@code control.quitSafely(...)}, so it cannot normally overlap a control-thread user of
+     * the account at all; this catches the case where that bounded join times out.
+     */
+    public boolean isCurrentAccount(GatewayAccount candidate) {
+        return candidate != null && candidate == account;
     }
 
     /**
@@ -65,6 +103,12 @@ public class SipAccountManager {
 
     /**
      * Create and register the SIP account.
+     *
+     * <p><b>Control thread only.</b> Not asserted here directly - the
+     * {@code endpointManager.hasTransport()} guard below asserts it, and every statement after
+     * that guard is a pjsua2 call, which aborts the process outright from a thread pjlib has
+     * never seen. Its two callers, {@code PjsipSipService.initializeSip} and
+     * {@code doReloadConfig}, both assert the control thread as their first statement.
      *
      * @param callbackService Service to receive callbacks (for GatewayAccount)
      * @throws Exception if registration fails
@@ -138,22 +182,36 @@ public class SipAccountManager {
 
     /**
      * Unregister and delete the account.
+     *
+     * <p>Both steps are synchronous by the time this returns, which is why the reload no
+     * longer sleeps afterwards: {@code Account.delete()} is the SWIG destructor and runs
+     * {@code Account::shutdown()} -> {@code pjsua_acc_del()}, which invalidates and frees the
+     * account slot under the pjsua lock before it returns. See {@code doReloadConfig}'s javadoc
+     * for why the removed 500 ms could not have established anything the reload needed.
+     *
+     * <p>Nothing is queued or deferred here, so the next statement on this thread may create a
+     * replacement account. Callers on the control thread get "deleted, then recreated, with no
+     * window in between" for free; that is the whole F4 remedy.
      */
     public void deleteAccount() {
-        if (account == null) {
+        // Snapshot: createAccount() runs on the control thread (SIP init / reload) and can
+        // replace the field while this runs from main's shutdown path, and every step below
+        // must act on the same account object.
+        GatewayAccount doomed = account;
+        if (doomed == null) {
             return;
         }
 
         Log.d(TAG, "Deleting account");
 
         try {
-            account.setRegistration(false);
+            doomed.setRegistration(false);
         } catch (Exception e) {
             Log.w(TAG, "Error unregistering: " + e.getMessage());
         }
 
         try {
-            account.delete();
+            doomed.delete();
         } catch (Exception e) {
             Log.w(TAG, "Error deleting account: " + e.getMessage());
         }
@@ -163,7 +221,11 @@ public class SipAccountManager {
     }
 
     /**
-     * Called by GatewayAccount when registration state changes.
+     * Called by GatewayAccount when registration state changes, on a pjsua worker.
+     *
+     * <p>The flag is set here and now, synchronously. The listener's <em>handling</em> is
+     * what {@code PjsipSipService} posts onto the control thread - never the flag, which
+     * everything from SMS forwarding to the Telecom retry chain gates on.
      */
     public void onRegState(boolean isRegistered, String reason) {
         this.registered = isRegistered;
@@ -185,14 +247,18 @@ public class SipAccountManager {
      * Get status string for UI.
      */
     public String getStatusString() {
+        // The pjsua worker that runs onRegState can change these underneath this method.
+        // account/registered are each read once; lastError is snapshotted below so the
+        // tested value is the reported one.
         if (account == null) {
             return "Not configured";
         }
         if (registered) {
             return "Registered";
         }
-        if (lastError != null) {
-            return "Error: " + lastError;
+        String error = lastError;
+        if (error != null) {
+            return "Error: " + error;
         }
         return "Connecting...";
     }
@@ -211,23 +277,30 @@ public class SipAccountManager {
 
         @Override
         public void onRegState(OnRegStateParam prm) {
+            // Owned native memory (Account.getInfo() -> (ptr, true)). AUDIT H7.
+            AccountInfo info = null;
             try {
-                AccountInfo info = getInfo();
+                info = getInfo();
                 boolean isReg = (info.getRegStatus() == pjsip_status_code.PJSIP_SC_OK);
                 String reason = info.getRegStatusText();
 
                 SipAccountManager.this.onRegState(isReg, reason);
             } catch (Exception e) {
                 Log.e(TAG, "Error in onRegState: " + e.getMessage());
+            } finally {
+                Pjsua2Lifetime.delete(info);
             }
         }
 
         @Override
         public void onIncomingCall(OnIncomingCallParam prm) {
-            Log.d(TAG, "Incoming call, callId=" + prm.getCallId());
+            int simSlotHint = readSimSlotHint(prm.getRdata());
+
+            Log.d(TAG, "Incoming call, callId=" + prm.getCallId()
+                    + (simSlotHint > 0 ? ", " + SipHeaderReader.SIM_HEADER + "=" + simSlotHint : ""));
 
             if (listener != null) {
-                listener.onIncomingCall(this, prm.getCallId());
+                listener.onIncomingCall(this, prm.getCallId(), simSlotHint);
             }
         }
 
@@ -239,8 +312,11 @@ public class SipAccountManager {
                 String body = prm.getMsgBody();
                 String contentType = prm.getContentType();
 
-                // Determine SIM slot from caller extension
-                int simSlot = config.getSimSlotForCaller(extractExtension(from));
+                // The PBX picks the SIM with X-GSM-SIM; without it, fall back to the caller extension.
+                int simSlot = readSimSlotHint(prm.getRdata());
+                if (simSlot == 0) {
+                    simSlot = config.getSimSlotForCaller(extractExtension(from));
+                }
 
                 Log.i(TAG, ">>> RECEIVED SIP MESSAGE: from=" + from + ", to=" + to + ", body=\"" + body + "\", contentType=" + contentType + ", SIM=" + simSlot);
 
@@ -253,6 +329,19 @@ public class SipAccountManager {
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error handling IM: " + e.getMessage());
+            }
+        }
+
+        /**
+         * Read the SIM slot the PBX requested, or 0 when it did not ask for one.
+         * Never throws - a missing or unreadable rdata just means "no preference".
+         */
+        private int readSimSlotHint(SipRxData rdata) {
+            try {
+                return rdata == null ? 0 : SipHeaderReader.readSimSlot(rdata.getWholeMsg());
+            } catch (Exception e) {
+                Log.w(TAG, "Could not read " + SipHeaderReader.SIM_HEADER + ": " + e.getMessage());
+                return 0;
             }
         }
 

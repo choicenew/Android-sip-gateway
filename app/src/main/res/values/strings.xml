@@ -1,7 +1,365 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<!--
+  GW-40 - every user-facing string in the app, in one place.
+
+  Before this commit there were 4 entries here and 68 literals hardcoded elsewhere:
+  43 android:text and 11 android:hint in activity_main.xml (which contained ZERO @string
+  references for text or hint), 4 in MainActivity and 10 setValue sites in MainViewModel.
+
+  Naming convention - prefix by ROLE, not by screen, because GW-41 is about to move most of
+  these to different screens in wave 2:
+
+    section_   a section header
+    label_     the label of a control or a status field
+    option_    one choice inside a radio group / checkbox / spinner
+    hint_      an EditText hint
+    help_      explanatory text under a control
+    action_    a button
+    status_    a status value the UI shows, including its initial placeholder
+    toast_     a transient message
+    select_    a Spinner dialog prompt (android:prompt)
+
+  Localisation is explicitly out of scope for Phase 4 (PHASE-4-PLAN section 8). Extracting
+  the strings is what makes it possible later; we ship English.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
     <string name="app_name">GSM-SIP Gateway</string>
+
+    <!-- ==================================================================================
+         Status
+         ================================================================================== -->
+    <string name="label_status">Status:</string>
+    <string name="status_not_started">Not started</string>
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_service_stopped">Service: Stopped</string>
+
+    <string name="label_permissions">Permissions (via root):</string>
+    <string name="status_checking">Checking…</string>
+    <string name="status_no_mixer_controls">No mixer controls found. Check root permissions.</string>
+
+    <!-- ==================================================================================
+         SIP configuration
+         ================================================================================== -->
+    <string name="section_sip_config">SIP Configuration:</string>
+    <string name="hint_sip_server">SIP Server</string>
+    <string name="hint_sip_port">SIP Port</string>
+    <string name="hint_sip_user">SIP Username</string>
+    <string name="hint_sip_password">SIP Password</string>
+    <string name="hint_sip_realm">SIP Realm (empty = any)</string>
+    <string name="option_use_tls">Use TLS (port 5061)</string>
+
+    <!-- SIM1 / SIM2 are the hardware slot names the modem and the PBX use
+         (X-GSM-SIM: 1 or 2). Lint's spell checker reads them as "SIM!", so the three
+         strings that carry them opt out of Typos rather than being reworded. -->
+    <string name="label_gsm_routing">Incoming GSM → SIP routing:</string>
+    <string name="hint_sim1_destination" tools:ignore="Typos">SIM1 → ext</string>
+    <string name="hint_sim2_destination" tools:ignore="Typos">SIM2 → ext</string>
+    <string name="help_sim2_optional" tools:ignore="Typos">Leave SIM2 empty if single-SIM phone</string>
+
+    <string name="label_incoming_mode">Incoming call mode:</string>
+    <string name="option_mode_sip_first">Start SIP → Answer GSM when connected (30s timeout)</string>
+    <string name="option_mode_answer_first">Answer GSM → Start SIP (30s timeout)</string>
+
+    <string name="action_save_settings">Save Settings</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+
+    <!-- ==================================================================================
+         SIP diagnostics
+         ================================================================================== -->
+    <string name="section_sip_diagnostics">SIP Diagnostics:</string>
+    <string name="help_test_call">Places a SIP call with no GSM leg. *43 is the FreePBX echo test.</string>
+    <string name="hint_test_destination">Destination</string>
+    <string name="action_test_call">Test Call</string>
+    <string name="action_hang_up">Hang Up</string>
+    <string name="option_verbose_sip_log">Verbose PJSIP logging (level 5, needs restart)</string>
+    <string name="option_dtmf_relay">Relay DTMF from SIP to GSM (far-end voice menus)</string>
+    <string name="status_no_test_call">No test call yet</string>
+
+    <!-- ==================================================================================
+         Battery
+         ================================================================================== -->
+    <string name="section_battery_limit">Battery Charge Limit:</string>
+    <string name="help_battery_limit">Stop charging at specified level (requires root)</string>
+    <string name="option_battery_limit_60">60%</string>
+    <string name="option_battery_limit_none">100% (no limit)</string>
+
+    <!-- ==================================================================================
+         Audio configuration
+
+         The device numbers and the mixer route are Qualcomm/MediaTek ALSA identifiers, not
+         prose - they stay as values in code and config, never as display strings.
+         ================================================================================== -->
+    <string name="section_audio_config">Audio Configuration:</string>
+    <string name="help_audio_qualcomm">Qualcomm: capture=VOC_REC, playback=Incall_Music</string>
+
+    <string name="label_sound_card">Sound Card:</string>
+    <string name="label_capture_device">Capture Device (GSM→SIP):</string>
+    <string name="label_playback_device">Playback Device (SIP→GSM):</string>
+    <string name="label_mixer_route">Mixer Route:</string>
+
+    <!-- Spinner dialog prompts. These three predate GW-40 and are LIVE: activity_main.xml
+         references them from android:prompt on the capture, playback and mixer spinners.
+         PHASE-4-PLAN section C2 records them as dead because it only counted
+         android:text and android:hint references; they are not. -->
     <string name="select_capture">Select Capture Device (GSM→SIP)</string>
     <string name="select_playback">Select Playback Device (SIP→GSM)</string>
     <string name="select_mixer">Select Mixer Route</string>
+
+    <string name="section_audio_gain">Audio Gain (dB):</string>
+    <string name="label_tx_gain">TX (GSM→SIP)</string>
+    <string name="label_rx_gain">RX (SIP→GSM)</string>
+    <!-- Hints here show the default value that applies when the field is left empty. -->
+    <string name="hint_tx_gain_default">-6</string>
+    <string name="hint_rx_gain_default">0</string>
+
+    <string name="action_save_audio">Save Audio</string>
+    <string name="action_restart">Restart</string>
+
+    <!-- ==================================================================================
+         Device mute preset
+         ================================================================================== -->
+    <string name="section_device_mute">Device Mute Preset:</string>
+    <string name="help_device_mute">Mutes speaker/mic on gateway during calls (enforced every 3s)</string>
+    <string name="label_detected_controls">Detected mixer controls (tap to toggle):</string>
+    <string name="label_manual_controls">Manual controls (comma-separated, for controls not in list):</string>
+    <!-- DEC1 / ADC1 are Qualcomm ALSA mixer control names; the spell checker reads the
+         trailing digit as "!". Same reason as the SIM1/SIM2 opt-out above. -->
+    <string name="hint_manual_controls" tools:ignore="Typos">e.g. DEC1 Volume, EAR_S, ADC1 MUX</string>
+    <string name="help_manual_controls">Use \'Volume\' suffix for INT controls (→0), others are ENUM (→ZERO)</string>
+
+    <!-- ==================================================================================
+         Web interface
+         ================================================================================== -->
+    <string name="label_web_interface">Web Interface (port 8080)</string>
+    <string name="label_web_interface_enabled">Web Interface: http://%1$s:8080</string>
+    <string name="label_web_interface_disabled">Web Interface (disabled)</string>
+
+    <!-- ==================================================================================
+         Transient messages
+         ================================================================================== -->
+    <string name="toast_connecting">Connecting to SIP server…</string>
+    <string name="toast_disconnected">Disconnected</string>
+    <string name="toast_restarting">Restarting…</string>
+    <string name="toast_restarted">Restarted</string>
+    <string name="toast_service_not_connected">Service not connected</string>
+    <string name="toast_test_call">Test call to %1$s (%2$s)</string>
+    <string name="toast_verbose_sip_log_on">Verbose PJSIP logging on (restart service to apply)</string>
+    <string name="toast_verbose_sip_log_off">Verbose PJSIP logging off (restart service to apply)</string>
+    <string name="toast_dtmf_relay_on">DTMF relay on</string>
+    <string name="toast_dtmf_relay_off">DTMF relay off</string>
+    <string name="toast_sip_settings_saved">SIP settings saved</string>
+    <string name="toast_web_interface_enabled">Web interface enabled on port 8080</string>
+    <string name="toast_web_interface_disabled">Web interface disabled</string>
+    <string name="toast_mute_preset">Preset: %1$s</string>
+
+    <!--
+      What an audio save actually promises, stated precisely (AUDIT H4b).
+
+      This used to be a flat "Restart to apply", which was honest when the profile
+      snapshotted its whole configuration in its constructor. Now the route, the capture and
+      playback devices and the mute-control list are re-read by QualcommAudioProfile.
+      setupMixer on every call, so they take effect on the next one. Two things still do
+      not, because GsmAudioPort reads them once and its port is never replaced
+      (AudioBridgeManager.Wiring): the sound card, and which SoC profile is selected. Saying
+      "restart" for everything would now under-claim; saying "applied" for everything would
+      over-claim, which is the failure H4b is about.
+
+      Moved here verbatim from MainViewModel.AUDIO_SAVED_TOAST by GW-40. The reasoning
+      belongs next to the words it is reasoning about.
+    -->
+    <string name="toast_audio_settings_saved">Audio settings saved. Route, devices and mute controls apply on the next call; sound card and SoC profile need a restart.</string>
+
+    <!-- ==================================================================================
+         GW-41 - the status-first main screen.
+
+         Everything below is new in wave 2. The status block renders GatewayStatus, which
+         GW-45 published whole and nothing consumed; the SoC profile is the control that
+         existed only on the web page (PHASE-4-PLAN section C8); the rest is the vocabulary
+         a collapsible, grouped screen needs and a flat one did not.
+         ================================================================================== -->
+
+    <!-- Section title for the group that holds the battery limit and the web interface. The
+         other three sections reuse the section_ strings that already name them. -->
+    <string name="section_system">System:</string>
+
+    <!-- Status chips. Deliberately short: they sit in a row with the call state and a
+         duration, on a phone, and a chip that wraps is a chip that has failed. -->
+    <string name="chip_registered">Registered</string>
+    <string name="chip_not_registered">No SIP</string>
+    <string name="chip_stopped">Stopped</string>
+    <string name="chip_no_service">No service</string>
+    <string name="chip_grace">Grace</string>
+
+    <!-- The three status lines, separately - which is the whole point of GW-45. -->
+    <string name="label_status_sip">SIP</string>
+    <string name="label_status_call">Call</string>
+    <string name="label_status_audio">Audio</string>
+
+    <!-- Call-object counters (GW-22). "alive" is callsCreated - callsDeleted and is the
+         number that must settle at 0 or 1; a climbing value means CallGraveyard is leaking
+         pjsua2 Call objects to the finalizer. -->
+    <string name="status_call_objects">pjsua2 calls — alive %1$d · created %2$d · deleted %3$d</string>
+
+    <!--
+      The watchdog block (GW-25).
+
+      This is the highest-value thing on the screen and the reason a status header exists at
+      all: silent-bridge detection and orphan termination were built because those failures
+      are invisible from outside the process, and until now the only place a human looks
+      showed none of it. A silent bridge is detection-only - the watchdog never terminates on
+      that signal - so a non-zero episode count beside zero terminations is exactly the
+      evidence GW-25 asked to collect.
+    -->
+    <string name="label_status_watchdog">Watchdog</string>
+    <string name="status_watchdog_clean">No findings</string>
+    <string name="status_watchdog_counts">terminated %1$d · silent bridge %2$d</string>
+    <string name="status_watchdog_last">Last: %1$s (%2$s)</string>
+
+    <!-- Relative ages, for the last watchdog finding. Kept as three resources rather than
+         one with a unit argument so a translation can put the unit where it belongs. -->
+    <string name="status_age_now">just now</string>
+    <string name="status_age_seconds">%1$ds ago</string>
+    <string name="status_age_minutes">%1$dm ago</string>
+    <string name="status_age_hours">%1$dh ago</string>
+
+    <!--
+      SoC audio profile (PHASE-4-PLAN section C8, GW-41 step 4d).
+
+      audio_profile was settable only from the web page, on a device whose entire purpose is
+      a SoC-specific audio tap. GatewayConfig already owned the key and both surfaces already
+      read it, so this is the control and nothing else.
+    -->
+    <string name="label_soc_profile">SoC Profile:</string>
+    <string name="select_soc_profile">Select SoC Profile</string>
+    <string name="help_soc_profile">Which chipset audio tap to use. Auto detects it; a change needs a restart.</string>
+    <string name="option_soc_profile_auto">Auto-detect</string>
+    <string name="option_soc_profile_qualcomm">Qualcomm</string>
+    <string name="option_soc_profile_mediatek">MediaTek</string>
+
+    <!-- Collapsible section affordance. Text rather than a drawable because res/drawable is
+         GW-44's this wave. -->
+    <string name="label_section_expanded">▾</string>
+    <string name="label_section_collapsed">▸</string>
+    <string name="cd_section_toggle">Show or hide this section</string>
+
+    <!-- ==================================================================================
+         GW-42 - the commissioning wizard.
+
+         Five steps: root, permissions, the dialer role, the SIP account, and what can
+         honestly be verified from the handset. Everything below is new in wave 3. The wizard
+         reuses the hint_ and action_ strings the main screen already defines wherever it asks
+         for the same thing, so a label cannot drift between the two surfaces.
+         ================================================================================== -->
+
+    <string name="setup_title">Set up gateway</string>
+    <string name="setup_step_indicator">Step %1$d of %2$d</string>
+
+    <!-- Navigation. Skip is a first-class action here, not an escape hatch: this wizard runs
+         on an appliance that may be being recovered in the field, and every step has to be
+         passable without completing it. -->
+    <string name="setup_action_next">Next</string>
+    <string name="setup_action_finish">Finish</string>
+    <string name="setup_action_skip">Skip</string>
+    <string name="setup_action_back">Back</string>
+    <string name="setup_action_close">Close</string>
+    <!-- Always on screen, under the footer. It is the recovery instruction: the whole point of
+         this wizard is that it can be walked away from, and someone holding a half-provisioned
+         phone should not have to guess that. -->
+    <string name="setup_close_hint">Close at any time — the main screen stays usable, and this wizard can be re-run from System.</string>
+
+    <!-- Step headers. The summary says why the step is on the list at all. -->
+    <string name="setup_step_root_title">Root access</string>
+    <string name="setup_step_root_summary">The gateway grants its own permissions, opens the ALSA devices and drives the mixer. Without root none of that works, and none of the steps after this one can be done from the phone.</string>
+
+    <string name="setup_step_permissions_title">Permissions</string>
+    <string name="setup_step_permissions_summary">Six runtime permissions, granted through root rather than through dialogs. Without them the service cannot read the modem or record call audio.</string>
+
+    <string name="setup_step_dialer_title">Default dialer</string>
+    <string name="setup_step_dialer_summary">Android binds an InCallService only for the default dialer. Without the role this app never sees a GSM call at all — the usual cause of a gateway that registers and then does nothing.</string>
+
+    <string name="setup_step_sip_title">SIP account</string>
+    <string name="setup_step_sip_summary">The PBX account this gateway registers with, and where each SIM sends its incoming calls.</string>
+
+    <string name="setup_step_verify_title">Verify</string>
+    <string name="setup_step_verify_summary">What can be checked from the handset, and what cannot. Read both — they are not the same claim.</string>
+
+    <!-- Chips. Short: they sit beside a line of detail on a phone. -->
+    <string name="setup_chip_unknown">Not checked</string>
+    <string name="setup_chip_skipped">Skipped</string>
+    <string name="setup_chip_root_ok">Root OK</string>
+    <string name="setup_chip_root_missing">No root</string>
+    <string name="setup_chip_permissions_ok">All granted</string>
+    <string name="setup_chip_permissions_missing">Missing</string>
+    <string name="setup_chip_dialer_ok">Default dialer</string>
+    <string name="setup_chip_dialer_missing">Not dialer</string>
+    <string name="setup_chip_registered">Registered</string>
+    <string name="setup_chip_not_registered">Not registered</string>
+    <string name="setup_chip_call_dialing">Dialling</string>
+    <string name="setup_chip_call_answered">Answered</string>
+    <string name="setup_chip_call_unanswered">No answer</string>
+    <string name="setup_chip_call_failed">Failed</string>
+
+    <!-- Step 1 - root -->
+    <string name="setup_root_help">Runs \'id\' through su and shows exactly what came back. If it fails, grant the app root in Magisk and check again — the answer is not cached.</string>
+    <string name="setup_root_not_checked">Not checked yet.</string>
+    <string name="setup_root_failed_detail">su exited %1$d: %2$s</string>
+    <string name="setup_no_output">no output</string>
+    <string name="setup_action_check_root">Check root</string>
+
+    <!-- Step 2 - permissions -->
+    <string name="setup_permissions_help">Granting also claims the dialer role, which is the next step. Refresh re-reads what actually stuck, rather than what the grant said.</string>
+    <string name="setup_action_grant">Grant via root</string>
+    <string name="setup_action_refresh_permissions">Refresh</string>
+    <string name="setup_action_battery_opt">Exempt from battery optimisation</string>
+    <string name="setup_battery_opt_help">Adds the app to the doze whitelist. A separate button because on some devices this has been seen to freeze the handset — it is your choice, not something the wizard does on the way past.</string>
+
+    <!-- Step 3 - the dialer role -->
+    <string name="setup_dialer_help">Claimed through root, then read back from the system rather than inferred from the command\'s exit code — on some builds the claim reports success and does nothing.</string>
+    <string name="setup_dialer_held">This app holds the dialer role. GSM calls will reach the gateway.</string>
+    <string name="setup_dialer_not_held">This app does not hold the dialer role. GSM calls will not reach the gateway.</string>
+    <string name="setup_action_claim_dialer">Set as default dialer</string>
+
+    <!-- Step 4 - the SIP account -->
+    <string name="setup_sip_existing_account">Already configured: %1$s@%2$s. Saving replaces it; Skip leaves it exactly as it is.</string>
+    <string name="setup_sip_blank_help">Every box is pre-filled from the current configuration, and a box left blank keeps what is stored. This wizard never clears a value, so re-running it cannot wipe a working gateway; clear a setting from the main screen instead.</string>
+    <string name="setup_sip_routing_help" tools:ignore="Typos">Where incoming GSM calls are sent. SIM2 can be left as it is on a single-SIM phone.</string>
+    <string name="setup_action_save_account">Save account</string>
+
+    <!-- Step 5 - verification.
+
+         The two headings below are deliberately not one heading. Registration is a fact the
+         PBX decided and the control thread published; the test call is evidence about
+         routing; neither is a statement about audio. Collapsing them into one green tick is
+         the failure this step was written to avoid. -->
+    <string name="setup_verify_registration_heading">1. Registration — checkable</string>
+    <string name="setup_verify_registration_help">A real check: the PBX accepted these credentials. It proves the account, the network path and the transport. It does not prove that call audio works.</string>
+    <string name="setup_action_start_gateway">Start gateway</string>
+    <string name="setup_action_reregister">Re-register</string>
+    <string name="setup_registration_not_running">The gateway is not running, so there is nothing registered to check.</string>
+
+    <string name="setup_verify_testcall_heading">2. Test call — evidence</string>
+    <string name="setup_verify_testcall_help">Places a SIP call with no GSM leg and transmits a tone into it. What it can show is whether the PBX routes this destination and answers. The whole transcript is below: read it rather than the chip.</string>
+    <string name="setup_test_destination_help">Use a real extension. The default is taken from this gateway\'s own SIM routing, because those are extensions the PBX already routes for it.</string>
+    <string name="setup_test_destination_warning">That is a feature code, and this gateway\'s trunk cannot dial one: the PBX\'s inbound context for the trunk routes extensions, not feature codes, so *43 and friends are rejected even on a correctly configured gateway. Dialling it anyway is allowed — the failure will just not mean anything.</string>
+    <string name="setup_test_call_not_run">No test call placed yet.</string>
+    <string name="setup_test_call_dialing">INVITE sent, waiting for the PBX.</string>
+    <string name="setup_test_call_answered">The PBX routed this destination and answered. SIP signalling and media negotiation work.</string>
+    <string name="setup_test_call_unanswered">The call ended without being answered — rejected, busy, or nobody there. Try another extension; this is not necessarily the gateway.</string>
+    <string name="setup_test_call_failed">The call could not be placed, or something failed while it was up. The transcript below says what.</string>
+
+    <string name="setup_audio_caveat">What this wizard cannot check is the GSM to SIP audio bridge. Whether call audio actually crosses between the modem and the PBX depends on the ALSA tap, the mixer route and the SoC profile, and no test on this handset can confirm it. Place a real call and listen, in both directions.</string>
+
+    <!-- Transient messages -->
+    <string name="setup_toast_account_saved">SIP account saved</string>
+    <string name="setup_toast_reregistering">Re-registering…</string>
+    <string name="setup_toast_test_call">Test call to %1$s</string>
+    <string name="setup_toast_need_destination">Enter a destination first</string>
+    <string name="setup_toast_battery_opt_requested">Requesting battery optimisation exemption…</string>
+
+    <!-- The re-run entry point, in the System section of the main screen. -->
+    <string name="setup_action_run_wizard">Run setup wizard</string>
+    <string name="setup_run_wizard_help">Root, permissions, dialer role, SIP account and verification, one step at a time. Safe to re-run: every step can be skipped and nothing is cleared.</string>
+
 </resources>
